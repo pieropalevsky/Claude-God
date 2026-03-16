@@ -27,9 +27,9 @@ class AuthManager: ObservableObject {
 
     private var credentialsWatcher: DispatchSourceFileSystemObject?
 
-    private static let refreshURL = URL(string: "https://platform.claude.com/v1/oauth/token")!
-    private static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-    private static let scopes = "user:profile user:inference user:sessions:claude_code"
+    // OAuth refresh is intentionally NOT done by this app.
+    // Claude Code manages the single-use refresh token cycle.
+    // If we refresh, we invalidate Claude Code's token → user must re-login.
 
     static let credentialsPath: URL = {
         FileManager.default.homeDirectoryForCurrentUser
@@ -91,56 +91,19 @@ class AuthManager: ObservableObject {
         return Date().addingTimeInterval(5 * 60) >= expiresDate
     }
 
-    func refreshAccessToken(completion: @escaping (Bool) -> Void) {
-        guard let rt = refreshToken else {
-            completion(false)
-            return
+    /// Reload credentials from disk/keychain instead of refreshing the token ourselves.
+    /// Claude Code manages the OAuth refresh cycle — if we use the single-use refresh token,
+    /// we invalidate Claude Code's copy and the user has to `claude login` again.
+    func reloadCredentials(completion: @escaping (Bool) -> Void) {
+        let previousToken = accessToken
+        loadCredentials()
+        let changed = accessToken != previousToken && isAuthenticated
+        if changed {
+            Log.info("Credentials reloaded from \(credentialSource.rawValue)")
+        } else {
+            Log.info("Credentials unchanged after reload")
         }
-
-        var request = URLRequest(url: Self.refreshURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 15
-
-        let body: [String: String] = [
-            "grant_type": "refresh_token",
-            "refresh_token": rt,
-            "client_id": Self.clientID,
-            "scope": Self.scopes
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        Log.info("Refreshing OAuth token...")
-
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self, let data = data, error == nil,
-                  let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode >= 200, httpResponse.statusCode < 300,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let newToken = json["access_token"] as? String, !newToken.isEmpty
-            else {
-                Log.error("Token refresh failed")
-                DispatchQueue.main.async {
-                    self?.isAuthenticated = false
-                }
-                completion(false)
-                return
-            }
-
-            DispatchQueue.main.async {
-                self.accessToken = newToken
-                if let newRefresh = json["refresh_token"] as? String {
-                    self.refreshToken = newRefresh
-                }
-                if let expiresIn = json["expires_in"] as? Int {
-                    self.tokenExpiresAt = Date().timeIntervalSince1970 * 1000 + Double(expiresIn) * 1000
-                }
-                Log.info("Token refreshed successfully (in-memory only)")
-                // Do NOT persist tokens to disk — Claude Code manages credentials.
-                // Writing here would invalidate Claude Code's refresh token (single-use).
-                completion(true)
-            }
-        }.resume()
+        completion(isAuthenticated)
     }
 
     // MARK: - Credentials file watcher

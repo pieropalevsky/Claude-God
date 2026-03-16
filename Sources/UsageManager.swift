@@ -908,7 +908,7 @@ class UsageManager: ObservableObject {
                 return
             }
             isRefreshingToken = true
-            auth.refreshAccessToken { [weak self] success in
+            auth.reloadCredentials { [weak self] success in
                 guard let self else { return }
                 self.isRefreshingToken = false
                 let queued = self.tokenRefreshQueue
@@ -1001,7 +1001,7 @@ class UsageManager: ObservableObject {
                 case 401, 403:
                     if self.auth.refreshToken != nil {
                         Log.info("Got \(httpResponse.statusCode), attempting token refresh...")
-                        self.auth.refreshAccessToken { success in
+                        self.auth.reloadCredentials { success in
                             if success {
                                 self.fetchUsage()
                             } else {
@@ -1025,7 +1025,7 @@ class UsageManager: ObservableObject {
                     if isLikelyStaleToken && self.auth.refreshToken != nil && retryCount == 0 {
                         // Token likely expired server-side — refresh and retry once
                         Log.info("429 with Retry-After:0 — likely stale token, refreshing...")
-                        self.auth.refreshAccessToken { success in
+                        self.auth.reloadCredentials { success in
                             if success {
                                 Log.info("Token refreshed, retrying fetch...")
                                 self.fetchUsage(retryCount: retryCount + 1)
