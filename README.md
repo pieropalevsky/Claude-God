@@ -164,6 +164,10 @@ git tag v2.8.0 && git push origin v2.8.0
 
 ## Changelog
 
+### v2.18.0
+- **New**: GitHub, swift-lsp, code-review, code-simplifier, context7, playwright plugin detail views (9 total)
+- **Fixed**: Menu bar icon contrast, font sizes +1pt, wider window
+
 ### v2.17.0
 - **New**: Superpowers plugin UI — browse skills, view plans with progress, design specs
 - **New**: Frontend Design plugin UI — design principles, aesthetic tones, anti-patterns, cookbook link

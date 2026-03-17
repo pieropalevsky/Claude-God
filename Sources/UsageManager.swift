@@ -285,6 +285,8 @@ class UsageManager: ObservableObject {
     let pluginManager = PluginManager()
     let superpowersManager = SuperpowersManager()
     let frontendDesignManager = FrontendDesignManager()
+    let githubPluginManager = GitHubPluginManager()
+    let genericPluginManager = GenericPluginManager()
 
     // MARK: - État de l'interface
 
@@ -387,7 +389,10 @@ class UsageManager: ObservableObject {
 
     var menuBarIconColor: Color {
         guard let q = worstQuota else { return .primary }
-        return q.level.color
+        switch q.level {
+        case .good: return .primary  // Use system color for contrast on light/dark menu bar
+        case .warning, .critical: return q.level.color
+        }
     }
 
     var nextResetDate: Date? {
@@ -584,6 +589,14 @@ class UsageManager: ObservableObject {
         }.store(in: &cancellables)
 
         frontendDesignManager.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
+
+        githubPluginManager.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
+
+        genericPluginManager.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }.store(in: &cancellables)
 

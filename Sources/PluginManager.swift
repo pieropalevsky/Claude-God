@@ -190,6 +190,17 @@ class PluginManager: ObservableObject {
         }
     }
 
+    func updatePlugin(_ plugin: MarketplacePlugin) {
+        isInstalling = plugin.id
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let success = Self.runClaude(arguments: ["plugin", "update", "\(plugin.name)@\(plugin.marketplace)"])
+            DispatchQueue.main.async {
+                self?.isInstalling = nil
+                if success { self?.refresh() }
+            }
+        }
+    }
+
     func uninstallPlugin(_ plugin: MarketplacePlugin) {
         isInstalling = plugin.id
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in

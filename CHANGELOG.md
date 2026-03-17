@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.18.0] - 2026-03-17
+
+### Added
+- GitHub plugin detail view — 26 MCP tools grouped by category (PRs, Issues, Search, Files, Repos), auth status indicator
+- Generic plugin detail views for swift-lsp, code-review, code-simplifier, context7, playwright — features list with icons and descriptions
+- Plugin update button — "Update to vX.Y.Z" on installed plugins with available updates (runs `claude plugin update`)
+- 9 plugins now have custom detail views in the Extensions tab
+
+### Fixed
+- Menu bar icon uses system color (black/white) in normal state for better contrast — green/orange/red only for warnings
+- Font sizes increased +1pt on small text (7→8, 8→9, 9→10, 10→11) for readability
+- App window slightly wider (380→400px)
+
 ## [2.17.1] - 2026-03-16
 
 ### Fixed
