@@ -164,6 +164,10 @@ git tag v2.8.0 && git push origin v2.8.0
 
 ## Changelog
 
+### v2.20.2
+- **Fixed**: App no longer gets stuck on "Rate limited" screen after `claude login` ([#5](https://github.com/Lcharvol/Claude-God/issues/5))
+- **Fixed**: Credential changes now trigger auto-refresh even when an error is displayed
+
 ### v2.20.1
 - **Fixed**: Refresh no longer gets stuck — cancellable fetches, stale response detection, centralized state reset
 - **New**: Peak / off-peak indicator with countdown to transition

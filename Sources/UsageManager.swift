@@ -697,7 +697,7 @@ class UsageManager: ObservableObject {
         auth.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async {
                 guard let self else { return }
-                if self.isAuthenticated && self.quotas.isEmpty && !self.isLoading {
+                if self.isAuthenticated && !self.isLoading && (self.quotas.isEmpty || self.errorMessage != nil) {
                     self.showSettings = false
                     self.refresh()
                 }
@@ -1198,6 +1198,8 @@ class UsageManager: ObservableObject {
                         }
                     } else {
                         self.finishLoading(error: "Rate limited — run `claude login` to refresh")
+                        self.rateLimitedUntil = Date().addingTimeInterval(60)
+                        Log.info("Rate limited (429), all retries exhausted, will auto-retry in 60s")
                     }
 
                 default:

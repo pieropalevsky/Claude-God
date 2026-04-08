@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.20.2] - 2026-04-08
+
+### Fixed
+- App no longer gets stuck on "Rate limited" screen after `claude login` (fixes #5)
+- Rate limit error now shows "Retry" button instead of incorrectly showing "Settings"
+- Credential changes (e.g. after `claude login`) now trigger auto-refresh even when an error is displayed
+- Auto-refresh retries after 60s instead of giving up permanently when rate limited with no cached data
+
 ## [2.20.1] - 2026-04-02
 
 ### Fixed

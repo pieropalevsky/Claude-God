@@ -1717,9 +1717,9 @@ struct MenuBarView: View {
     }
 
     private func errorView(_ error: String) -> some View {
-        let isAuth = error.contains("login") || error.contains("expired") || error.contains("authenticated")
+        let isRateLimit = error.contains("Rate limited")
+        let isAuth = !isRateLimit && (error.contains("login") || error.contains("expired") || error.contains("authenticated"))
         let isNetwork = error.contains("Network") || error.contains("connection")
-        let isRateLimit = error.contains("Rate limited") || error.contains("retry")
 
         return SHCard {
             HStack(spacing: 10) {
