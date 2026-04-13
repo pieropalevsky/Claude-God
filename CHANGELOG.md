@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.20.4] - 2026-04-13
+
+### Fixed
+- Cancelled fetches now properly clear loading state (was stuck forever if cancelled at wrong time)
+- All credential reload callbacks use `finishLoading()` consistently — no more manual `isLoading = false` that could desync
+- Removed redundant nested `DispatchQueue.main.async` in 401/403 and 429 token refresh callbacks
+- Rate limit backoff counter resets when cooldown expires naturally (was only on 200 or manual retry, causing stuck 10min backoff)
+- Added 10s timeout safety on all credential reload callbacks — prevents permanent stuck state if callback never fires
+- Removed unused `fetchID` variable in fetch setup
+
 ## [2.20.3] - 2026-04-13
 
 ### Fixed

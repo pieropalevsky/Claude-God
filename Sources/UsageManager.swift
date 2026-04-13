@@ -1007,6 +1007,8 @@ class UsageManager: ObservableObject {
                 return
             }
             rateLimitedUntil = nil
+            consecutive429Count = 0
+            Log.info("Rate limit cooldown expired, resetting backoff")
         }
         refreshInternal()
     }
@@ -1033,26 +1035,34 @@ class UsageManager: ObservableObject {
                 tokenRefreshQueue.append { [weak self] success in
                     guard let self else { return }
                     if success { self.fetchUsage() }
-                    else {
-                        self.isLoading = false
-                        self.errorMessage = "Session expired — run `claude auth login`"
-                    }
+                    else { self.finishLoading(error: "Session expired — run `claude auth login`") }
                 }
                 return
             }
             isRefreshingToken = true
+            var didComplete = false
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self, !didComplete else { return }
+                didComplete = true
+                Log.warn("Token refresh timed out after 10s")
+                self.isRefreshingToken = false
+                let queued = self.tokenRefreshQueue
+                self.tokenRefreshQueue.removeAll()
+                self.finishLoading(error: "Session expired — run `claude auth login`")
+                for callback in queued { callback(false) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
             auth.reloadCredentials { [weak self] success in
-                guard let self else { return }
+                timeout.cancel()
+                guard let self, !didComplete else { return }
+                didComplete = true
                 self.isRefreshingToken = false
                 let queued = self.tokenRefreshQueue
                 self.tokenRefreshQueue.removeAll()
                 if success {
                     self.fetchUsage()
                 } else {
-                    DispatchQueue.main.async {
-                        self.isLoading = false
-                        self.errorMessage = "Session expired — run `claude auth login`"
-                    }
+                    self.finishLoading(error: "Session expired — run `claude auth login`")
                 }
                 // Notify queued callers
                 for callback in queued { callback(success) }
@@ -1070,16 +1080,24 @@ class UsageManager: ObservableObject {
 
     private func fetchUsage(retryCount: Int = 0) {
         guard let token = auth.accessToken else {
-            isLoading = false
-            loadingStartedAt = nil
-            errorMessage = "No access token — run `claude auth login`"
+            finishLoading(error: "No access token — run `claude auth login`")
             return
         }
 
         if auth.tokenExpired {
             Log.warn("Token expired, attempting to reload credentials...")
+            var didComplete = false
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self, !didComplete else { return }
+                didComplete = true
+                Log.warn("Credential reload timed out after 10s")
+                self.finishLoading(error: "Session expired — run `claude auth login`")
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
             auth.reloadCredentials { [weak self] success in
-                guard let self else { return }
+                timeout.cancel()
+                guard let self, !didComplete else { return }
+                didComplete = true
                 if success && !self.auth.tokenExpired {
                     Log.info("Got fresh token, fetching usage...")
                     self.fetchUsage(retryCount: retryCount)
@@ -1091,7 +1109,6 @@ class UsageManager: ObservableObject {
         }
 
         // Tag this fetch so stale responses from cancelled/superseded fetches are ignored
-        let fetchID = currentFetchID ?? UUID()
         if retryCount == 0 {
             currentFetchTask?.cancel()
             let newID = UUID()
@@ -1120,9 +1137,10 @@ class UsageManager: ObservableObject {
                 }
 
                 if let error = error {
-                    // Don't retry if cancelled
+                    // Don't retry if cancelled — but clear loading state
                     if (error as NSError).code == NSURLErrorCancelled {
                         Log.info("Fetch cancelled")
+                        self.finishLoading()
                         return
                     }
                     if retryCount < Self.maxRetries {
@@ -1175,9 +1193,7 @@ class UsageManager: ObservableObject {
                             if success {
                                 self.fetchUsage(retryCount: retryCount + 1)
                             } else {
-                                DispatchQueue.main.async {
-                                    self.finishLoading(error: "Session expired — run `claude auth login`")
-                                }
+                                self.finishLoading(error: "Session expired — run `claude auth login`")
                             }
                         }
                     } else {
@@ -1189,28 +1205,27 @@ class UsageManager: ObservableObject {
                     let retryAfterValue = retryAfterHeader.flatMap(Double.init) ?? -1
                     self.consecutive429Count += 1
 
-                    // Retry-After:0 on first attempt may indicate a stale token — try refreshing once
-                    if retryAfterValue == 0 && self.auth.refreshToken != nil && retryCount == 0 {
-                        Log.info("429 with Retry-After:0 — likely stale token, refreshing...")
+                    // Retry-After:0 likely means stale token — try refreshing once
+                    if retryAfterValue <= 0 && self.auth.refreshToken != nil && retryCount == 0 {
+                        Log.info("429 with Retry-After:\(Int(retryAfterValue)) — likely stale token, refreshing...")
                         self.auth.reloadCredentials { [weak self] success in
                             guard let self else { return }
                             if success {
                                 Log.info("Token refreshed, retrying fetch...")
                                 self.fetchUsage(retryCount: retryCount + 1)
                             } else {
-                                DispatchQueue.main.async {
-                                    self.finishLoading(error: "Session expired — run `claude auth login`")
-                                }
+                                self.finishLoading(error: "Session expired — run `claude auth login`")
                             }
                         }
                     } else {
-                        // Respect server's Retry-After when present.
-                        // When missing/zero, escalate: 30s, 2min, 10min, 30min, 60min, 120min (cap)
+                        // Server provided a real Retry-After: respect it (capped at 2h)
+                        // No Retry-After or zero after token refresh failed: short cooldown
                         let cooldown: Double
                         if retryAfterValue > 0 {
                             cooldown = min(retryAfterValue, 7200)
                         } else {
-                            let steps: [Double] = [30, 120, 600, 1800, 3600, 7200]
+                            // No Retry-After header — use moderate backoff
+                            let steps: [Double] = [15, 30, 60, 120, 300, 600]
                             let index = min(self.consecutive429Count - 1, steps.count - 1)
                             cooldown = steps[index]
                         }
