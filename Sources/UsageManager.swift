@@ -591,6 +591,7 @@ class UsageManager: ObservableObject {
     private static let statsWindowDays = 30
 
     private var rateLimitedUntil: Date?
+    private var consecutive429Count = 0
     private var countdownTimer: AnyCancellable?
     private var autoRefreshTimer: AnyCancellable?
     private var activeSessionTimer: AnyCancellable?
@@ -985,6 +986,7 @@ class UsageManager: ObservableObject {
     /// Manual refresh — always clears rate limit cooldown
     func refresh() {
         rateLimitedUntil = nil
+        consecutive429Count = 0
         refreshInternal()
     }
 
@@ -1018,7 +1020,7 @@ class UsageManager: ObservableObject {
         }
         guard !isLoading else { return }
         guard isAuthenticated, auth.accessToken != nil else {
-            errorMessage = "Not authenticated — run `claude login` in Terminal"
+            errorMessage = "Not authenticated — run `claude auth login` in Terminal"
             return
         }
 
@@ -1033,7 +1035,7 @@ class UsageManager: ObservableObject {
                     if success { self.fetchUsage() }
                     else {
                         self.isLoading = false
-                        self.errorMessage = "Session expired — run `claude login`"
+                        self.errorMessage = "Session expired — run `claude auth login`"
                     }
                 }
                 return
@@ -1049,7 +1051,7 @@ class UsageManager: ObservableObject {
                 } else {
                     DispatchQueue.main.async {
                         self.isLoading = false
-                        self.errorMessage = "Session expired — run `claude login`"
+                        self.errorMessage = "Session expired — run `claude auth login`"
                     }
                 }
                 // Notify queued callers
@@ -1070,7 +1072,21 @@ class UsageManager: ObservableObject {
         guard let token = auth.accessToken else {
             isLoading = false
             loadingStartedAt = nil
-            errorMessage = "No access token — run `claude login`"
+            errorMessage = "No access token — run `claude auth login`"
+            return
+        }
+
+        if auth.tokenExpired {
+            Log.warn("Token expired, attempting to reload credentials...")
+            auth.reloadCredentials { [weak self] success in
+                guard let self else { return }
+                if success && !self.auth.tokenExpired {
+                    Log.info("Got fresh token, fetching usage...")
+                    self.fetchUsage(retryCount: retryCount)
+                } else {
+                    self.finishLoading(error: "Session expired — run `claude auth login`")
+                }
+            }
             return
         }
 
@@ -1142,6 +1158,7 @@ class UsageManager: ObservableObject {
                     )
                     self.parseUsageResponse(data)
                     self.finishLoading()
+                    self.consecutive429Count = 0
                     self.lastRefresh = Date()
                     self.refreshStats()
                     self.checkNotifications()
@@ -1159,20 +1176,21 @@ class UsageManager: ObservableObject {
                                 self.fetchUsage(retryCount: retryCount + 1)
                             } else {
                                 DispatchQueue.main.async {
-                                    self.finishLoading(error: "Session expired — run `claude login`")
+                                    self.finishLoading(error: "Session expired — run `claude auth login`")
                                 }
                             }
                         }
                     } else {
-                        self.finishLoading(error: "Session expired — run `claude login`")
+                        self.finishLoading(error: "Session expired — run `claude auth login`")
                     }
 
                 case 429:
                     let retryAfterHeader = httpResponse.value(forHTTPHeaderField: "Retry-After")
                     let retryAfterValue = retryAfterHeader.flatMap(Double.init) ?? -1
-                    let isLikelyStaleToken = retryAfterValue == 0
+                    self.consecutive429Count += 1
 
-                    if isLikelyStaleToken && self.auth.refreshToken != nil && retryCount == 0 {
+                    // Retry-After:0 on first attempt may indicate a stale token — try refreshing once
+                    if retryAfterValue == 0 && self.auth.refreshToken != nil && retryCount == 0 {
                         Log.info("429 with Retry-After:0 — likely stale token, refreshing...")
                         self.auth.reloadCredentials { [weak self] success in
                             guard let self else { return }
@@ -1181,25 +1199,30 @@ class UsageManager: ObservableObject {
                                 self.fetchUsage(retryCount: retryCount + 1)
                             } else {
                                 DispatchQueue.main.async {
-                                    self.finishLoading(error: "Session expired — run `claude login`")
+                                    self.finishLoading(error: "Session expired — run `claude auth login`")
                                 }
                             }
                         }
-                    } else if !self.quotas.isEmpty {
-                        let cooldown = min(retryAfterValue > 0 ? retryAfterValue : 30.0, 60.0)
-                        self.finishLoading()
-                        self.rateLimitedUntil = Date().addingTimeInterval(cooldown)
-                        Log.info("Rate limited (429), keeping existing data, retry in \(Int(cooldown))s")
-                    } else if retryCount < Self.maxRetries {
-                        let delay = 5 * pow(2.0, Double(retryCount))
-                        Log.info("Rate limited (429), retrying in \(Int(delay))s (attempt \(retryCount + 1)/\(Self.maxRetries))...")
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                            self?.fetchUsage(retryCount: retryCount + 1)
-                        }
                     } else {
-                        self.finishLoading(error: "Rate limited — run `claude login` to refresh")
-                        self.rateLimitedUntil = Date().addingTimeInterval(60)
-                        Log.info("Rate limited (429), all retries exhausted, will auto-retry in 60s")
+                        // Respect server's Retry-After when present.
+                        // When missing/zero, escalate: 30s, 2min, 10min, 30min, 60min, 120min (cap)
+                        let cooldown: Double
+                        if retryAfterValue > 0 {
+                            cooldown = min(retryAfterValue, 7200)
+                        } else {
+                            let steps: [Double] = [30, 120, 600, 1800, 3600, 7200]
+                            let index = min(self.consecutive429Count - 1, steps.count - 1)
+                            cooldown = steps[index]
+                        }
+                        self.rateLimitedUntil = Date().addingTimeInterval(cooldown)
+                        if !self.quotas.isEmpty {
+                            self.finishLoading()
+                            Log.info("Rate limited (429), keeping existing data, retry in \(Int(cooldown))s")
+                        } else {
+                            let display = cooldown >= 60 ? "\(Int(cooldown / 60))min" : "\(Int(cooldown))s"
+                            self.finishLoading(error: "Rate limited — retrying in \(display)")
+                            Log.info("Rate limited (429 #\(self.consecutive429Count)), no data yet, will auto-retry in \(Int(cooldown))s")
+                        }
                     }
 
                 default:
