@@ -1003,8 +1003,8 @@ class UsageManager: ObservableObject {
     func launchAutoReconnect() {
         guard !isAutoReconnecting else { return }
         isAutoReconnecting = true
-        errorMessage = "Opening browser to sign in..."
-        Log.info("Auto-reconnect: searching for claude binary")
+        errorMessage = "Opening Terminal to sign in..."
+        Log.info("Auto-reconnect: opening Terminal with claude auth login")
 
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidatePaths = [
@@ -1021,33 +1021,35 @@ class UsageManager: ObservableObject {
             return
         }
 
-        Log.info("Auto-reconnect: launching \(claudePath) login")
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: claudePath)
-        process.arguments = ["login"]
-        process.terminationHandler = { [weak self] proc in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.isAutoReconnecting = false
-                if proc.terminationStatus == 0 {
-                    Log.info("claude login completed — reloading credentials")
-                    self.auth.reloadCredentials { [weak self] success in
-                        guard let self else { return }
-                        if success { self.refresh() }
-                        else { self.errorMessage = "Reconnect failed — run `claude auth login` in Terminal" }
-                    }
-                } else {
-                    Log.warn("claude login exited with status \(proc.terminationStatus)")
-                    self.errorMessage = "Reconnect failed — run `claude auth login` in Terminal"
-                }
-            }
-        }
-        do {
-            try process.run()
-        } catch {
-            Log.error("Failed to launch claude login: \(error)")
+        // Run in Terminal so claude auth login has a proper TTY and can open the browser
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "\(claudePath) auth login"
+        end tell
+        """
+        var appleScriptError: NSDictionary?
+        guard let appleScript = NSAppleScript(source: script) else {
             isAutoReconnecting = false
             errorMessage = "Session expired — run `claude auth login` in Terminal"
+            return
+        }
+        appleScript.executeAndReturnError(&appleScriptError)
+
+        if let err = appleScriptError {
+            Log.error("AppleScript error: \(err)")
+            isAutoReconnecting = false
+            errorMessage = "Session expired — run `claude auth login` in Terminal"
+            return
+        }
+
+        Log.info("Terminal opened with claude auth login — watching for new credentials")
+        // File watcher will pick up new credentials automatically once claude auth login completes
+        // Reset reconnecting state after a timeout so the button re-enables
+        DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
+            guard let self, self.isAutoReconnecting else { return }
+            self.isAutoReconnecting = false
+            if !self.auth.tokenExpired { self.refresh() }
         }
     }
 
