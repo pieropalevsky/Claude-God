@@ -51,6 +51,21 @@ enum RingImageMaker {
             let center = NSPoint(x: size / 2, y: size / 2)
             let outerRadius = size / 2 - lineWidth / 2
 
+            // ── Subtle background disc ──
+            // On light menubars the bright rings (especially green) can wash out;
+            // a faint dark circle behind them restores contrast without being obtrusive.
+            // Check appearance at draw time — image is regenerated from the main
+            // thread on every quota refresh so it stays in sync with mode changes.
+            let isDark = NSApp.effectiveAppearance
+                .bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let bgAlpha: CGFloat = isDark ? 0.0 : 0.13
+            if bgAlpha > 0 {
+                let bgPath = NSBezierPath(ovalIn: NSRect(x: 0, y: 0,
+                                                         width: size, height: size))
+                NSColor.black.withAlphaComponent(bgAlpha).setFill()
+                bgPath.fill()
+            }
+
             // ── Rings ──
             for (i, ring) in rings.enumerated() {
                 let radius = outerRadius - CGFloat(i) * step
