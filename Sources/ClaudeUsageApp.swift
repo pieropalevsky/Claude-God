@@ -19,10 +19,10 @@ struct ClaudeGodApp: App {
             MenuBarView(manager: manager)
         } label: {
             HStack(spacing: 4) {
-                if manager.menuBarDisplayMode == .iconPlus {
+                if manager.menuBarDisplayMode == .rings {
                     // Apple Watch-style concentric rings
                     MenuBarRingView(
-                        quotas: manager.quotas,
+                        quotas: manager.ringQuotaOptions,
                         labels: manager.ringStatLabels
                     )
                 } else {

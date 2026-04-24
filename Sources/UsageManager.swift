@@ -34,7 +34,7 @@ enum RefreshInterval: Int, CaseIterable, Identifiable {
 
 enum MenuBarDisplayMode: Int, CaseIterable, Identifiable {
     case iconOnly = 0
-    case iconPlus = 4          // Apple Watch-style concentric rings
+    case rings = 4             // Apple Watch-style concentric rings
     case percentage = 1
     case percentageAndTimer = 2
     case allQuotas = 3
@@ -44,7 +44,7 @@ enum MenuBarDisplayMode: Int, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .iconOnly: return "Icon"
-        case .iconPlus: return "Icon+"
+        case .rings: return "Rings"
         case .percentage: return "Session"
         case .percentageAndTimer: return "Timer"
         case .allQuotas: return "All"
@@ -54,7 +54,7 @@ enum MenuBarDisplayMode: Int, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .iconOnly: return "C"
-        case .iconPlus: return "◎ activity rings"
+        case .rings: return "◎ activity rings"
         case .percentage: return "C 15%"
         case .percentageAndTimer: return "C 15% · 2h31m"
         case .allQuotas: return "C 15% | 31% | 22%"
@@ -392,7 +392,27 @@ class UsageManager: ObservableObject {
         }
     }
 
-    /// Up to 3 quota labels displayed as concentric rings in Icon+ mode.
+    // MARK: - Ring stat options (quotas + virtual timer)
+
+    /// Virtual quota: fraction of the 5-hour session window elapsed.
+    /// Ring fills as the window progresses toward reset.
+    var sessionTimerQuota: UsageQuota? {
+        guard let resetDate = nextResetDate else { return nil }
+        let window: TimeInterval = 5 * 3600
+        let remaining = max(0, resetDate.timeIntervalSinceNow)
+        let elapsed = max(0, window - remaining)
+        let pct = min(elapsed / window * 100, 100)
+        return UsageQuota(label: "Timer", icon: "timer", utilization: pct, resetsAt: resetDate)
+    }
+
+    /// All selectable ring options: timer (if available) + live API quotas.
+    var ringQuotaOptions: [UsageQuota] {
+        var opts = quotas
+        if let t = sessionTimerQuota { opts.insert(t, at: 0) }
+        return opts
+    }
+
+    /// Up to 3 quota labels displayed as concentric rings in Rings mode.
     /// Empty string = ring slot unused.
     @Published var ringStatLabels: [String] {
         didSet {
@@ -415,7 +435,7 @@ class UsageManager: ObservableObject {
 
     var menuBarTitle: String {
         switch menuBarDisplayMode {
-        case .iconOnly, .iconPlus:
+        case .iconOnly, .rings:
             return ""
         case .percentage:
             guard let q = primaryQuota else { return "—" }

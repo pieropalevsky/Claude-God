@@ -393,7 +393,7 @@ struct MenuBarView: View {
             }
 
             // Icon+ ring configuration
-            if manager.menuBarDisplayMode == .iconPlus {
+            if manager.menuBarDisplayMode == .rings {
                 SHCard {
                     VStack(alignment: .leading, spacing: 10) {
                         SHLabel("Icon+ Rings")
@@ -401,7 +401,7 @@ struct MenuBarView: View {
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
 
-                        let quotaOptions: [String] = manager.quotas.map(\.label)
+                        let quotaOptions: [String] = manager.ringQuotaOptions.map(\.label)
 
                         ForEach(0..<3, id: \.self) { i in
                             HStack(spacing: 6) {
@@ -443,7 +443,7 @@ struct MenuBarView: View {
 
                         // Live preview
                         RingSettingsPreview(
-                            quotas: manager.quotas,
+                            quotas: manager.ringQuotaOptions,
                             labels: manager.ringStatLabels
                         )
                     }
