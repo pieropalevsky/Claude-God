@@ -164,6 +164,11 @@ git tag v2.8.0 && git push origin v2.8.0
 
 ## Changelog
 
+### v2.21.1
+- **Fixed**: Drastic energy savings — App Nap re-enabled, adaptive countdown, slower active-session polling, JSONL scan deferred to popover open ([#14](https://github.com/Lcharvol/Claude-God/issues/14))
+- **Fixed**: Widget extension now registers — added missing `NSExtensionPointIdentifier` ([#13](https://github.com/Lcharvol/Claude-God/issues/13))
+- **Fixed**: Resizable popover actually responds to drag — visible grip handle replaces the broken NSWindow wiring
+
 ### v2.21.0
 - **New**: Session+Week menu bar mode — session %, reset countdown, and weekly % at a glance ([#15](https://github.com/Lcharvol/Claude-God/issues/15))
 - **New**: Resizable window with persisted height
