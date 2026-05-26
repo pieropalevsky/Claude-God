@@ -2,10 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.22.2] - 2026-05-26
 
 ### Changed
-- **Peak hours window updated to Anthropic's new 5am–11am PT band** — reflects the policy change announced 2026-03-26 where 5-hour session limits burn faster during weekdays 5am–11am Pacific (1pm–7pm GMT) due to overlapping US-morning, European-afternoon, and Asia-evening demand. Tooltips and transition countdowns now derive from a single `peakHoursDescription` source-of-truth on `UsageManager` ([#24](https://github.com/Lcharvol/Claude-God/pull/24))
+- **Peak hours window updated to Anthropic's new 5am–11am PT band** — reflects the policy change announced 2026-03-26 where 5-hour session limits burn faster during weekdays 5am–11am Pacific (1pm–7pm GMT) due to overlapping US-morning, European-afternoon, and Asia-evening demand. The previous 7am–5pm PT window was Claude God's original guess at "US business hours" and no longer matched Anthropic's actual throttling band ([#24](https://github.com/Lcharvol/Claude-God/pull/24), thanks @pieropalevsky)
+
+### Refactored
+- **Peak-hours tooltip drift eliminated** — `MenuBarView` tooltips now derive from a single `UsageManager.peakHoursDescription` computed from `peakStartHour` / `peakEndHour` constants, so future window changes touch one place instead of three. Doc-comment also rewritten to explain *why* the window is what it is (Anthropic global throttling, not US business hours)
 
 ## [2.22.1] - 2026-05-26
 

@@ -164,6 +164,10 @@ git tag v2.8.0 && git push origin v2.8.0
 
 ## Changelog
 
+### v2.22.2
+- **Changed**: Peak hours window updated to Mon–Fri 5am–11am PT to match Anthropic's actual throttling band for 5-hour session limits (was 7am–5pm PT) ([#24](https://github.com/Lcharvol/Claude-God/pull/24), thanks @pieropalevsky)
+- **Refactored**: Tooltips derive from a single `peakHoursDescription` source-of-truth so future policy changes touch one constant instead of three sites
+
 ### v2.22.1
 - **Fixed**: OAuth token self-refresh — now sends `application/x-www-form-urlencoded` per RFC 6749, ending the HTTP 400 loop on silent refresh ([#21](https://github.com/Lcharvol/Claude-God/issues/21), [#22](https://github.com/Lcharvol/Claude-God/pull/22))
 - **Fixed**: `claude` binary resolution — falls back to `$SHELL -l -c "which claude"` so nvm / fnm / volta / pnpm installs are found
