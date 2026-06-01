@@ -458,12 +458,12 @@ struct MenuBarView: View {
                     HStack {
                         SHLabel("Custom Alerts")
                         Spacer()
-                        if !manager.quotas.isEmpty {
+                        if !manager.allNotifiableQuotas.isEmpty {
                             SHButton(label: "Add", icon: "plus", style: .ghost) {
                                 // Pick a quota that doesn't already have a rule at 80%
                                 let existing = Set(manager.customAlertRules.map { "\($0.quotaLabel)-\(Int($0.threshold))" })
-                                let available = manager.quotas.first(where: { !existing.contains("\($0.label)-80") })
-                                let quotaLabel = available?.label ?? manager.quotas.first?.label ?? "Session (5h)"
+                                let available = manager.allNotifiableQuotas.first(where: { !existing.contains("\($0.label)-80") })
+                                let quotaLabel = available?.label ?? manager.allNotifiableQuotas.first?.label ?? "Session (5h)"
                                 manager.customAlertRules.append(AlertRule(quotaLabel: quotaLabel, threshold: 80))
                             }
                         }
@@ -814,9 +814,33 @@ struct MenuBarView: View {
                         Text("Extra usage")
                             .font(.system(size: 11, weight: .medium))
                         Spacer()
-                        SHBadge(text: extra.isEnabled ? "On" : "Off",
-                                color: extra.isEnabled ? .green : .secondary)
+                        if let util = extra.utilization {
+                            Text(formatUtilization(util))
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(UsageLevel(utilization: util).color)
+                        } else {
+                            SHBadge(text: extra.isEnabled ? "On" : "Off",
+                                    color: extra.isEnabled ? .green : .secondary)
+                        }
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Extra usage\(extra.utilization.map { ", \(Int($0)) percent used" } ?? "")")
+
+                    if let util = extra.utilization {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Theme.muted)
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(UsageLevel(utilization: util).color)
+                                    .frame(width: max(0, geo.size.width * CGFloat(util / 100)))
+                                    .animation(.easeOut(duration: 0.6), value: util)
+                            }
+                        }
+                        .frame(height: 6)
+                        .accessibilityHidden(true)
+                    }
+
                     HStack {
                         Text("Spent this month")
                             .font(.system(size: 11))
