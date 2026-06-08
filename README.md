@@ -164,6 +164,11 @@ git tag v2.8.0 && git push origin v2.8.0
 
 ## Changelog
 
+### v2.23.1
+- **Fixed**: Embedded `claude auth login` no longer crashes the app — PTY slave FD was being closed twice (after the first close, the OS reused that FD slot for a guarded keychain socket, then the handle's dealloc triggered `EXC_GUARD`); slave handle now uses `closeOnDealloc: false` ([#26](https://github.com/Lcharvol/Claude-God/issues/26), [#27](https://github.com/Lcharvol/Claude-God/pull/27), thanks @nairdaleo)
+- **Fixed**: Credentials detected when only per-project Keychain entries exist — newer Claude Code writes suffixed entries (`Claude Code-credentials/path/...`) and may leave the base entry stale, so signed-in users appeared "Not connected"; `AuthManager` now scans all `Claude Code-credentials*` items as a fallback
+- **Fixed**: Popover only grows downward when resizing — new `WindowTopAnchor` pins the top edge to the status bar item in Release/Homebrew builds (was resizing from the center)
+
 ### v2.23.0
 - **New**: Extra Usage (dollar budget) is now a first-class quota across the app — surfaced as a % in every menu bar mode (including `E X%` in "All" mode), selectable as a ring in Icon+ Rings, drives icon warning/critical colors, and fires standard + custom usage alerts. The popover's Extra Usage card gains a color-coded progress bar when a monthly limit is set ([#25](https://github.com/Lcharvol/Claude-God/pull/25), thanks @ecoffey)
 

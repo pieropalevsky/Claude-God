@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.23.1] - 2026-06-08
+
+### Fixed
+- **Embedded `claude auth login` no longer crashes the app** — the PTY slave file descriptor was being closed twice (once explicitly after fork, then again when the `FileHandle` was deallocated with `closeOnDealloc: true`). After the first `close()` recycled the FD number, the OS reused it for a guarded keychain/socket FD, so the handle's dealloc triggered `EXC_GUARD` on whatever now owned that slot. Switching the slave handle to `closeOnDealloc: false` removes the double-close ([#26](https://github.com/Lcharvol/Claude-God/issues/26), [#27](https://github.com/Lcharvol/Claude-God/pull/27), thanks @nairdaleo)
+- **Credentials detected when only per-project keychain entries exist** — newer Claude Code versions write credentials to suffixed Keychain entries like `"Claude Code-credentials/path/to/project"` and may leave the base `"Claude Code-credentials"` entry stale or absent. `AuthManager.loadFromKeychain()` now falls back to a Security-framework scan that picks the best valid entry across all `"Claude Code-credentials*"` items when the base entry is missing or expired, so users who appeared "Not connected" right after signing in are picked up correctly
+- **Popover only grows downward when resizing** — in Release/Homebrew builds SwiftUI was resizing the `MenuBarExtra` window from its center, causing the popover to expand from both top and bottom and detach visually from the status bar item. A new `WindowTopAnchor` pins `maxY` (the top edge) so the window stays anchored to the menu bar while the bottom edge follows the drag
+
 ## [2.23.0] - 2026-06-01
 
 ### Added
